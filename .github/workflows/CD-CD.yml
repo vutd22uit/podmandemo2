@@ -1,4 +1,4 @@
-name: Podman CI/CD on Google Cloud
+name: Podman CI/CD 
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v3
 
@@ -61,3 +61,4 @@ jobs:
             podman rm podman-demo-container || true
             podman run -d --name podman-demo-container -p 80:80 docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:latest
           "
+
