@@ -45,11 +45,12 @@ jobs:
         uses: google-github-actions/setup-gcloud@v1
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          service_account_key: ${{ secrets.GCP_SA_KEY_BASE64 }}
 
-      - name: Activate Service Account
+      - name: Decode Base64 and Activate Service Account
         run: |
-          echo "${{ secrets.GCP_SA_KEY }}" > "${HOME}/gcp-key.json"
+          echo "${{ secrets.GCP_SA_KEY_BASE64 }}" | base64 --decode > "${HOME}/gcp-key.json"
+          cat "${HOME}/gcp-key.json"  # In nội dung để xác minh tệp JSON đã giải mã
           gcloud auth activate-service-account --key-file="${HOME}/gcp-key.json"
 
       - name: Deploy to Google Compute Engine
