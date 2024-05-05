@@ -1,4 +1,4 @@
-name: Podman CI/CD on Google Cloud
+name: Podman CI/CD trên Google Cloud
 
 on:
   push:
@@ -9,57 +9,57 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - uses: actions/checkout@v2
-    
-    - name: Set up Podman
-      run: |
-        sudo apt-get update
-        sudo apt-get -y install podman
-        
-    - name: Build the Docker image
-      run: |
-        podman build . --file Dockerfile --tag docker.io/vutd22uit/podman-demo:${GITHUB_SHA::7}
-        podman tag docker.io/vutd22uit/podman-demo:${GITHUB_SHA::7} docker.io/vutd22uit/podman-demo:latest
-        
-    - name: Run Trivy vulnerability scanner
-      run: |
-        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
-        trivy image docker.io/vutd22uit/podman-demo:${GITHUB_SHA::7}
-        
-    - name: Log in to Docker Hub
-      env:
-        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      run: |
-        echo $DOCKER_PASSWORD | podman login docker.io -u $DOCKER_USERNAME --password-stdin
-        
-    - name: Push to Docker Hub
-      run: |
-        podman push docker.io/vutd22uit/podman-demo:${GITHUB_SHA::7}
-        podman push docker.io/vutd22uit/podman-demo:latest
-        
-deploy:
-  needs: build
-  runs-on: ubuntu-latest
+      - uses: actions/checkout@v2
 
-  steps:
-  - name: Set up Cloud SDK
-    uses: google-github-actions/setup-gcloud@v0
-    with:
-      service_account_key: ${{ secrets.GCP_SA_KEY }}
-      project_id: ${{ secrets.GCP_PROJECT_ID }}
+      - name: Cài đặt Podman
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install podman
 
-  - name: Deploy to Google Compute Engine
-    env:
-      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-      GCE_INSTANCE: ${{ secrets.GCE_INSTANCE_NAME }}
-      GCE_ZONE: ${{ secrets.GCE_INSTANCE_ZONE }}
-    run: |
-      gcloud compute ssh $GCE_INSTANCE --zone $GCE_ZONE -- "
-        podman pull docker.io/$DOCKER_USERNAME/podman-demo:latest
-        podman stop podman-demo-container || true
-        podman rm podman-demo-container || true
-        podman run -d --name podman-demo-container -p 80:80 docker.io/$DOCKER_USERNAME/podman-demo:latest
-      "
+      - name: Xây dựng hình ảnh Docker
+        run: |
+          podman build . --file Dockerfile --tag docker.io/vutd22uit/podman-demo:${GITHUB_SHA::7}
+          podman tag docker.io/vutd22uit/podman-demo:${GITHUB_SHA::7} docker.io/vutd22uit/podman-demo:latest
+
+      - name: Quét lỗ hổng bảo mật với Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          trivy image docker.io/vutd22uit/podman-demo:${GITHUB_SHA::7}
+
+      - name: Đăng nhập vào Docker Hub
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          echo $DOCKER_PASSWORD | podman login docker.io -u $DOCKER_USERNAME --password-stdin
+
+      - name: Đẩy hình ảnh lên Docker Hub
+        run: |
+          podman push docker.io/vutd22uit/podman-demo:${GITHUB_SHA::7}
+          podman push docker.io/vutd22uit/podman-demo:latest
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Cài đặt Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v0
+        with:
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Triển khai lên Google Compute Engine
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          GCE_INSTANCE: ${{ secrets.GCE_INSTANCE_NAME }}
+          GCE_ZONE: ${{ secrets.GCE_INSTANCE_ZONE }}
+        run: |
+          gcloud compute ssh $GCE_INSTANCE --zone $GCE_ZONE -- "
+            podman pull docker.io/$DOCKER_USERNAME/podman-demo:latest
+            podman stop podman-demo-container || true
+            podman rm podman-demo-container || true
+            podman run -d --name podman-demo-container -p 80:80 docker.io/$DOCKER_USERNAME/podman-demo:latest
+          "
