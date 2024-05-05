@@ -7,57 +7,57 @@ on:
     branches: [ main ]
 
 jobs:
+
   build-and-push:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Check out the code
-        uses: actions/checkout@v3
-
-      - name: Install Podman
-        run: |
-          sudo apt-get update
-          sudo apt-get -y install podman
-
-      - name: Build Docker image with Podman
-        run: |
-          podman build . --file Dockerfile --tag docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:${GITHUB_SHA::7}
-          podman tag docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:${GITHUB_SHA::7} docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:latest
-
-      - name: Log in to Docker Hub
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-        run: |
-          echo "${DOCKER_PASSWORD}" | podman login docker.io -u "${DOCKER_USERNAME}" --password-stdin
-
-      - name: Push Docker image to Docker Hub
-        run: |
-          podman push docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:${GITHUB_SHA::7}
-          podman push docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:latest
-
+    - name: Check out the code
+      uses: actions/checkout@v3
+      
+    - name: Install Podman
+      run: |
+        sudo apt-get update
+        sudo apt-get -y install podman
+        
+    - name: Build Docker image with Podman
+      run: |
+        podman build . --file Dockerfile --tag docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:${GITHUB_SHA::7}
+        podman tag docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:${GITHUB_SHA::7} docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:latest
+        
+    - name: Log in to Docker Hub
+      env:
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      run: |
+        echo "${DOCKER_PASSWORD}" | podman login docker.io -u "${DOCKER_USERNAME}" --password-stdin
+        
+    - name: Push Docker image to Docker Hub
+      run: |
+        podman push docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:${GITHUB_SHA::7}
+        podman push docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:latest
+        
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
 
     steps:
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
-        with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-          service_account_key: ${{ secrets.GCP_SA_KEY_BASE64 }}
-
-      - name: Decode Base64 and Activate Service Account
-        run: |
-          echo "${{ secrets.GCP_SA_KEY_BASE64 }}" | base64 --decode > "${HOME}/gcp-key.json"
-          cat "${HOME}/gcp-key.json"  # In nội dung để xác minh tệp JSON đã giải mã
-          gcloud auth activate-service-account --key-file="${HOME}/gcp-key.json"
-
-      - name: Deploy to Google Compute Engine
-        run: |
-          gcloud compute ssh ${{ secrets.GCE_INSTANCE_NAME }} --zone=${{ secrets.GCE_INSTANCE_ZONE }} -- "
-            podman pull docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:latest
-            podman stop podman-demo-container || true
-            podman rm podman-demo-container || true
-            podman run -d --name podman-demo-container -p 8080:80 docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:latest
-          "
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+        service_account_key: ${{ secrets.GCP_SA_KEY_BASE64 }}
+        
+    - name: Decode Base64 and Activate Service Account
+      run: |
+        echo "${{ secrets.GCP_SA_KEY_BASE64 }}" | base64 --decode > "${HOME}/gcp-key.json"
+        gcloud auth activate-service-account --key-file="${HOME}/gcp-key.json"
+        
+    - name: Deploy to Google Compute Engine
+      run: |
+        gcloud compute ssh ${{ secrets.GCE_INSTANCE_NAME }} --zone=${{ secrets.GCE_INSTANCE_ZONE }} -- "
+          podman pull docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:latest
+          podman stop podman-demo-container || true
+          podman rm podman-demo-container || true
+          podman run -d --name podman-demo-container --cgroup-manager=cgroupfs -p 8080:80 docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:latest
+        "
