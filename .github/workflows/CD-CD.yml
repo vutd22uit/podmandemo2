@@ -47,13 +47,14 @@ jobs:
       uses: google-github-actions/setup-gcloud@v1
       with:
         project_id: ${{ secrets.GCP_PROJECT_ID }}
-        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+        export_default_credentials: true
 
     - name: Deploy to Google Compute Engine
       run: |
-        gcloud compute ssh ${{ secrets.GCE_INSTANCE_NAME }} --zone ${{ secrets.GCE_INSTANCE_ZONE }} -- "
+        gcloud compute ssh ${{ secrets.GCE_INSTANCE_NAME }} --zone=${{ secrets.GCE_INSTANCE_ZONE }} -- "
           podman pull docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:latest
           podman stop podman-demo-container || true
           podman rm podman-demo-container || true
           podman run -d --name podman-demo-container -p 80:80 docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:latest
-        "
+        " 
