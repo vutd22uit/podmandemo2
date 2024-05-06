@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: podman-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: podman-demo
+  template:
+    metadata:
+      labels:
+        app: podman-demo
+    spec:
+      containers:
+      - name: podman-demo-container
+        image: gcr.io/${GCP_PROJECT_ID}/podman-demo:latest
+        ports:
+        - containerPort: 80
