@@ -1,4 +1,4 @@
-name: Podman CI/CD on Google Cloud
+name: Podman CI/CD on Google Cloud Run
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-push:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -21,48 +21,24 @@ jobs:
 
       - name: Build Docker image with Podman
         run: |
-          podman build . --file Dockerfile --tag docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:${GITHUB_SHA::7}
-          podman tag docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:${GITHUB_SHA::7} docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:latest
+          podman build . --file Dockerfile --tag gcr.io/${{ secrets.GCP_PROJECT_ID }}/podman-demo:${GITHUB_SHA::7}
+          podman tag gcr.io/${{ secrets.GCP_PROJECT_ID }}/podman-demo:${GITHUB_SHA::7} gcr.io/${{ secrets.GCP_PROJECT_ID }}/podman-demo:latest
 
-      - name: Log in to Docker Hub
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Log in to Google Container Registry
         run: |
-          echo "${DOCKER_PASSWORD}" | podman login docker.io -u "${DOCKER_USERNAME}" --password-stdin
+          gcloud auth configure-docker
 
-      - name: Push Docker image to Docker Hub
+      - name: Push Docker image to Google Container Registry
         run: |
-          podman push docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:${GITHUB_SHA::7}
-          podman push docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:latest
+          podman push gcr.io/${{ secrets.GCP_PROJECT_ID }}/podman-demo:${GITHUB_SHA::7}
+          podman push gcr.io/${{ secrets.GCP_PROJECT_ID }}/podman-demo:latest
 
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-
-    steps:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
           service_account_key: ${{ secrets.GCP_SA_KEY_BASE64 }}
 
-      - name: Decode Base64 and Activate Service Account
+      - name: Deploy to Google Cloud Run
         run: |
-          echo "${{ secrets.GCP_SA_KEY_BASE64 }}" | base64 --decode > "${HOME}/gcp-key.json"
-          gcloud auth activate-service-account --key-file="${HOME}/gcp-key.json"
-
-      - name: Deploy to Google Compute Engine
-        run: |
-          gcloud compute ssh ${{ secrets.GCE_INSTANCE_NAME }} --zone=${{ secrets.GCE_INSTANCE_ZONE }} -- "
-            podman pull docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:latest
-            podman stop podman-demo-container || true
-            podman rm podman-demo-container || true
-            podman run -d --name podman-demo-container -p 8080:80 docker.io/${{ secrets.DOCKER_USERNAME }}/podman-demo:latest
-          "
-
-      - name: Verify Deployment
-        run: |
-          gcloud compute ssh ${{ secrets.GCE_INSTANCE_NAME }} --zone=${{ secrets.GCE_INSTANCE_ZONE }} -- "
-            podman ps
-          "
+          gcloud run deploy podman-demo --image=gcr.io/${{ secrets.GCP_PROJECT_ID }}/podman-demo:latest --platform=managed --region=us-central1 --allow-unauthenticated
