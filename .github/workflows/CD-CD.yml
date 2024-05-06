@@ -1,4 +1,4 @@
-name: Podman CI/CD on Google Cloud Run
+name: Podman CI/CD on Google Cloud
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-deploy:
+  build-and-push:
     runs-on: ubuntu-latest
 
     steps:
@@ -24,21 +24,36 @@ jobs:
           podman build . --file Dockerfile --tag gcr.io/${{ secrets.GCP_PROJECT_ID }}/podman-demo:${GITHUB_SHA::7}
           podman tag gcr.io/${{ secrets.GCP_PROJECT_ID }}/podman-demo:${GITHUB_SHA::7} gcr.io/${{ secrets.GCP_PROJECT_ID }}/podman-demo:latest
 
-      - name: Log in to Google Container Registry
+      - name: Authenticate to Google Cloud Registry
+        env:
+          GCP_SA_KEY_BASE64: ${{ secrets.GCP_SA_KEY_BASE64 }}
         run: |
-          gcloud auth configure-docker
+          echo "${GCP_SA_KEY_BASE64}" | base64 --decode > "${HOME}/gcp-key.json"
+          gcloud auth activate-service-account --key-file="${HOME}/gcp-key.json"
+          gcloud auth configure-docker gcr.io
 
-      - name: Push Docker image to Google Container Registry
+      - name: Push Docker image to Google Cloud Registry
         run: |
           podman push gcr.io/${{ secrets.GCP_PROJECT_ID }}/podman-demo:${GITHUB_SHA::7}
           podman push gcr.io/${{ secrets.GCP_PROJECT_ID }}/podman-demo:latest
 
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
           service_account_key: ${{ secrets.GCP_SA_KEY_BASE64 }}
 
-      - name: Deploy to Google Cloud Run
+      - name: Authenticate with Kubernetes
         run: |
-          gcloud run deploy podman-demo --image=gcr.io/${{ secrets.GCP_PROJECT_ID }}/podman-demo:latest --platform=managed --region=us-central1 --allow-unauthenticated
+          echo "${{ secrets.GCP_SA_KEY_BASE64 }}" | base64 --decode > "${HOME}/gcp-key.json"
+          gcloud auth activate-service-account --key-file="${HOME}/gcp-key.json"
+          gcloud container clusters get-credentials ${{ secrets.GKE_CLUSTER_NAME }} --zone ${{ secrets.GKE_CLUSTER_ZONE }} --project ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Deploy to GKE
+        run: |
+          kubectl apply -f deployment.yaml
